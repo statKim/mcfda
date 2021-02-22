@@ -56,7 +56,7 @@
 #' # plot the object
 #' plot(mu.obj)
 #' @export meanfunc
-meanfunc <- function(t,y,newt=NULL,method=c('PACE','FOURIER'),
+meanfunc <- function(t,y,newt=NULL,method=c('PACE','FOURIER','Huber'),
                       tuning='cv',weig=NULL,...)
 {
 
@@ -69,6 +69,9 @@ meanfunc <- function(t,y,newt=NULL,method=c('PACE','FOURIER'),
             stop('the length of y must match the length of t')
         if(method=='PACE')
             R <- mean.pace(t,y,tuning,weig,...)
+        else if (method == "Huber") {
+            R <- mean.huber(t,y,tuning,weig,...)   # Huber option
+        }
         else
             R <- mean.basis(t,y,tuning,weig,...)
     }
@@ -87,6 +90,83 @@ meanfunc <- function(t,y,newt=NULL,method=c('PACE','FOURIER'),
     class(R) <- 'meanfunc'
     
     if(!is.null(newt)) R$fitted <- predict(R,newt)
+    
+    return(R)
+}
+
+
+mean.huber <- function(t,y,tuning,weig,...)
+{
+    others <- list(...)
+    
+    if(is.null(weig)) weig <- get.weig.mean(t,y,'OBS')
+    else if(is.character(weig)) weig <- get.weig.mean(t,y,weig)
+    else stop('weig is not recognized.')
+    
+    # estimate the domain, used when method == 'FOURIER' and also plot.meanfunc
+    domain <- get.optional.param('domain',others,NULL)
+    if(is.null(domain))
+    {
+        domain <- c(0,0)
+        domain[1] <- min(unlist(t))
+        domain[2] <- max(unlist(t))
+        domain <- c(domain[1]-0.01*(domain[2]-domain[1]),
+                    domain[2]+0.01*(domain[2]-domain[1]))
+    }
+    
+    if(is.list(t))
+    {
+        n <- length(t)
+        x <- unlist(t)
+        y <- unlist(y)
+        
+        # expand weig into the same format of t
+        mi <- sapply(t,length)
+        weig <- lapply(1:length(t),function(i) rep(weig[i],mi[i]))
+        
+        weig <- unlist(weig)
+        
+        datatype <- 'irregular'
+    }
+    else
+    {
+        n <- length(t)
+        weig <- rep(1/n,n)
+        datatype <- 'regular'
+        
+        x <- t
+        y <- apply(y,2,mean)
+    }
+    
+    
+    kernel <- tolower(get.optional.param('kernel',others,'epanechnikov'))
+    #kernel <- match.arg(kernel,c('GAUSSIAN','EPANECHNIKOV'))
+    #if(kernel == 'GAUSSIAN') kernel <- locpol::gaussK
+    #else kernel <- locpol::EpaK
+    
+    deg <- get.optional.param('deg',others,1)
+    bw <- get.optional.param('bw',others,NULL)
+    
+    ord <- sort(x,index.return=T)$ix
+    x <- x[ord]
+    y <- y[ord]
+    weig <- weig[ord]
+    
+    # if(is.null(bw)) bw <- bw.lp1D(x,y,weight=weig,kernel=kernel,degree=deg,method='cv',K=5,H=NULL)
+    # #bw <- compute.bw.1D(x,y,tuning,weig,kernel,deg)
+    if (is.null(bw)) {
+        bw <- cv.local_kern_smooth(Lt = x, Ly = y, newt = NULL, 
+                                   kernel = kernel, loss = "Huber", K = 5, parallel = TRUE)
+    }
+    
+    R <- list(bw=bw,x=x,y=y,n=n,method='Huber',domain=domain,
+              weig=weig,kernel=kernel,deg=deg,yend=c(NULL,NULL))
+    class(R) <- 'meanfunc'
+    
+    L0 <- domain[2]-domain[1]
+    yend <- predict(R,c(domain[1]+L0/100,domain[2]-L0/100))
+    
+    R$yend <- yend
     
     return(R)
 }
@@ -455,7 +535,33 @@ predict.meanfunc <- function(meanfunc.obj,newt)
         if(toupper(meanfunc.obj$method) == 'PACE')
         {
             return(pred(newt))
+            
+        } else if (toupper(meanfunc.obj$method) == 'Huber') {   # Huber option
+            idxl <- newt < meanfunc.obj$domain[1]
+            idxu <- newt > meanfunc.obj$domain[2]
+            idx <- (!idxl) & (!idxu)
+            
+            newt0 <- newt[idx]
+            ord <- sort(newt0,index.return=T)$ix
+            
+            tmp <- rep(Inf,length(newt0))
+            
+            tmp[ord] <- local_kern_smooth(Lt = meanfunc.obj$x, 
+                                          Ly = meanfunc.obj$y, 
+                                          newt = newt0[ord],
+                                          bw = meanfunc.obj$bw, 
+                                          kernel = meanfunc.obj$kernel, 
+                                          loss = "Huber", 
+                                          k2 = 1.345)
+            
+            yhat <- rep(0,length(newt))
+            yhat[idx] <- tmp
+            yhat[idxl] <- meanfunc.obj$yend[1]
+            yhat[idxu] <- meanfunc.obj$yend[2]
+            
+            return(yhat)
         }
+        
         else if(toupper(meanfunc.obj$method) == 'FOURIER')
         {
             domain <- meanfunc.obj$domain

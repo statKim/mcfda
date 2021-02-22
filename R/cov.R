@@ -85,7 +85,7 @@
 #' @export covfunc
 #' @useDynLib mcfda
 covfunc <- function( t,y,newt=NULL,mu=NULL,weig=NULL,
-                      method=c('FOURIER','PACE','SP'),...)
+                      method=c('FOURIER','PACE','SP','Huber'),...)
 {
     method <- match.arg(method)
     R <- NULL
@@ -98,6 +98,9 @@ covfunc <- function( t,y,newt=NULL,mu=NULL,weig=NULL,
             return(cov.pace(t,y,mu=mu,newt=newt,...))
         else if(method=='SP')
             return(cov.sp(t,y,mu=mu,newt=newt,...))
+        else if (method == 'Huber') {
+            return(cov.huber(t,y,mu=mu,newt=newt,...))
+        }
         else
             return(cov.basis(t,y,mu=mu,newt=newt,...))
     }
