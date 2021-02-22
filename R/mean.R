@@ -536,7 +536,7 @@ predict.meanfunc <- function(meanfunc.obj,newt)
         {
             return(pred(newt))
             
-        } else if (toupper(meanfunc.obj$method) == 'Huber') {   # Huber option
+        } else if (toupper(meanfunc.obj$method) == 'HUBER') {   # Huber option
             idxl <- newt < meanfunc.obj$domain[1]
             idxu <- newt > meanfunc.obj$domain[2]
             idx <- (!idxl) & (!idxu)
