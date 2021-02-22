@@ -92,7 +92,7 @@ cov.huber <- function(Lt,Ly,newt=NULL,
 # loss : a loss function for kernel smoothing("L2" is squared loss, "Huber" is huber loss.)
 #   For loss = "Huber", it uses `rlm()` in `MASS` and fits the robust regression with Huber loss. 
 #   So additional parameters of `rlm()` can be applied. (k2, maxit, ...)
-local_kern_smooth <- function(Lt, Ly, newt = NULL, bw, kernel = "epan", loss = "L2", ...) {
+local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epan", loss = "L2", ...) {
     if (is.list(Lt) | is.list(Ly)) {
         Lt <- unlist(Lt)
         Ly <- unlist(Ly)
@@ -101,6 +101,15 @@ local_kern_smooth <- function(Lt, Ly, newt = NULL, bw, kernel = "epan", loss = "
     if (is.null(newt)) {
         newt <- Lt
     }
+    if (is.list(newt)) {
+        newt <- unlist(newt)
+    }
+    
+    # # If `bw` is not defined, 5-fold CV is performed.
+    # if (is.null(bw)) {
+    #   bw <- cv.local_kern_smooth(Lt = Lt, Ly = Ly, newt = NULL, 
+    #                              kernel = kernel, loss = loss, K = 5, parallel = TRUE)
+    # }
     
     w <- 1/length(Lt)
     mu_hat <- sapply(newt, function(t) {
@@ -151,16 +160,20 @@ local_kern_smooth <- function(Lt, Ly, newt = NULL, bw, kernel = "epan", loss = "
 # Lt : a list of vectors containing time points for each curve
 # Ly : a list of vectors containing observations for each curve
 # K : the number of folds
+# bw_cand : user defined bandwidth candidates for CV
 # parallel : If parallel is TRUE, it implements `foreach()` in `doParallel` for CV.
 # Other parameters are same with `local_kern_smooth()`.
-cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epan", loss = "L2", K = 5, parallel = FALSE, ...) {
+cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epan", loss = "L2", K = 5, 
+                                 bw_cand = NULL, parallel = FALSE, ...) {
     if (is.list(Lt) | is.list(Ly)) {
         stop("Lt and Ly can be only a list type.")
     }
     
-    a <- min(unlist(Lt))
-    b <- max(unlist(Lt))
-    bw_cand <- 10^seq(-2, 0, length.out = 20) * (b - a)/3
+    if (is.null(bw_cand)) {
+        a <- min(unlist(Lt))
+        b <- max(unlist(Lt))
+        bw_cand <- 10^seq(-2, 0, length.out = 20) * (b - a)/3
+    }
     
     # get index for each folds
     folds <- list()
@@ -187,11 +200,14 @@ cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epan", loss = "L
                             .export = c("local_kern_smooth"), .packages = c("MASS")) %dopar% {
                                 err <- 0
                                 for (k in 1:K) {
-                                    t <- Lt[ folds[[k]] ]
-                                    y <- Ly[ folds[[k]] ]
+                                    Lt_train <- Lt[ -folds[[k]] ]
+                                    Ly_train <- Ly[ -folds[[k]] ]
+                                    Lt_test <- Lt[ folds[[k]] ]
+                                    Ly_test <- Ly[ folds[[k]] ]
                                     
-                                    y_hat <- local_kern_smooth(Lt = t, Ly = y, newt = newt, 
+                                    y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
                                                                bw = bw_cand[i], kernel = kernel, loss = loss, ...)
+                                    y <- unlist(Ly_test)
                                     err <- err + (y %*% y_hat)   # squared errors 
                                 }
                                 
@@ -202,12 +218,15 @@ cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epan", loss = "L
     } else {
         cv_error <- rep(0, length(bw_cand))
         for (k in 1:K) {
-            t <- Lt[ folds[[k]] ]
-            y <- Ly[ folds[[k]] ]
+            Lt_train <- Lt[ -folds[[k]] ]
+            Ly_train <- Ly[ -folds[[k]] ]
+            Lt_test <- Lt[ folds[[k]] ]
+            Ly_test <- Ly[ folds[[k]] ]
             
             for (i in 1:length(bw_cand)) {
-                y_hat <- local_kern_smooth(Lt = t, Ly = y, newt = newt, 
+                y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
                                            bw = bw_cand[i], kernel = kernel, loss = loss, ...)
+                y <- unlist(Ly_test)
                 cv_error[i] <- cv_error[i] + (y %*% y_hat)   # squared errors
             }
         }
@@ -215,6 +234,13 @@ cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epan", loss = "L
     
     bw <- bw_cand[ which.min(cv_error) ]
     
-    return(bw)
+    return(
+        list(selected_bw = bw,
+             cv.error = data.frame(bw = bw_cand,
+                                   error = cv_error))
+    )
 }
+
+
+
 
