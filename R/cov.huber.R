@@ -27,7 +27,7 @@ cov.huber <- function(Lt,Ly,newt=NULL,
     }
     
     if(is.function(mu)) mu.hat <- lapply(Lt,mu)
-    else mu.hat <- predict(mu,Lt)
+    else mu.hat <- predict(mu, unlist(Lt))       # Huber option
     
     if(is.null(sig2e)) sig2e <- sigma2(Lt,Ly)
     
