@@ -155,8 +155,9 @@ mean.huber <- function(t,y,tuning,weig,...)
     # if(is.null(bw)) bw <- bw.lp1D(x,y,weight=weig,kernel=kernel,degree=deg,method='cv',K=5,H=NULL)
     # #bw <- compute.bw.1D(x,y,tuning,weig,kernel,deg)
     if (is.null(bw)) {
-        bw <- cv.local_kern_smooth(Lt = x, Ly = y, newt = NULL, 
-                                   kernel = kernel, loss = "Huber", K = 5, parallel = TRUE)
+        bw_obj <- cv.local_kern_smooth(Lt = x, Ly = y, newt = x, 
+                                       kernel = kernel, loss = "Huber", K = 5, parallel = TRUE)
+        bw <- bw_obj$selected_bw
     }
     
     R <- list(bw=bw,x=x,y=y,n=n,method='Huber',domain=domain,

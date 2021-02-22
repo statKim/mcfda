@@ -13,7 +13,7 @@
 #'         \item{When \code{method='FOURIER'}, additional parameters \code{q},\code{rho},\code{ext} and \code{domain} are optional. If they are not provided, then they will be deduced from data or selected by the specified \code{tuning} method.}
 #'     }
 #' @export
-varfunc <- function(Lt,Ly,newt=NULL,sig2=NULL,method=c('PACE','FOURIER','Huber'),mu=NULL,weig=NULL,...)
+varfunc <- function(Lt,Ly,newt=NULL,sig2=NULL,method=c('PACE','FOURIER','HUBER'),mu=NULL,weig=NULL,...)
 {
     method <- match.arg(method)
     if(is.list(Lt) && is.list(Ly))
@@ -68,7 +68,7 @@ predict.varfunc <- function(R,newt)
 {
     tmp <- predict(R$obj,newt)
     
-    if (R$obj$method == "Huber") {   # Huber option
+    if (R$obj$method == "HUBER") {   # Huber option
         return(tmp)
     }
     
