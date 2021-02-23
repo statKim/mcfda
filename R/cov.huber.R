@@ -9,7 +9,8 @@ cov.huber <- function(Lt,Ly,newt=NULL,
                       theta0=NULL,
                       lb=NULL,
                       ub=NULL,
-                      D=NULL)
+                      D=NULL,
+                      kernel = "gauss")
 {
     
     if(is.null(corf)){
@@ -23,7 +24,7 @@ cov.huber <- function(Lt,Ly,newt=NULL,
     
     if(is.null(mu))
     {
-        mu <- meanfunc(Lt, Ly, method = 'HUBER')   # Huber option
+        mu <- meanfunc(Lt, Ly, kernel = kernel, method = 'HUBER')   # Huber option
     }
     
     if(is.function(mu)) mu.hat <- lapply(Lt,mu)
@@ -34,7 +35,7 @@ cov.huber <- function(Lt,Ly,newt=NULL,
     if(is.null(sig2x))
     {
         # sig2x <- varfunc(Lt,Ly,mu=mu,sig2=sig2e)
-        sig2x <- varfunc(Lt, Ly, mu = mu, sig2 = sig2e, method = "HUBER")   # Huber option
+        sig2x <- varfunc(Lt, Ly, mu = mu, sig2 = sig2e, kernel = kernel, method = "HUBER")   # Huber option
     }
     
     if(is.function(sig2x))
@@ -93,7 +94,7 @@ cov.huber <- function(Lt,Ly,newt=NULL,
 # loss : a loss function for kernel smoothing("L2" is squared loss, "Huber" is huber loss.)
 #   For loss = "Huber", it uses `rlm()` in `MASS` and fits the robust regression with Huber loss. 
 #   So additional parameters of `rlm()` can be applied. (k2, maxit, ...)
-local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epan", loss = "L2", ...) {
+local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epanechnikov", loss = "L2", ...) {
     if (is.list(Lt) | is.list(Ly)) {
         Lt <- unlist(Lt)
         Ly <- unlist(Ly)
@@ -116,7 +117,7 @@ local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epan", l
     mu_hat <- sapply(newt, function(t) {
         tmp <- (Lt - t) / bw
         
-        if (kernel == "epan") {
+        if (kernel == "epanechnikov") {
             kern <- (3/4 * w) * (1 - tmp^2)   # Epanechnikov kernel
         } else if (kernel == "gauss") {
             kern <- w * 1/sqrt(2*pi) * exp(-1/2 * tmp^2)   # gaussian kernel
@@ -164,7 +165,7 @@ local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epan", l
 # bw_cand : user defined bandwidth candidates for CV
 # parallel : If parallel is TRUE, it implements `foreach()` in `doParallel` for CV.
 # Other parameters are same with `local_kern_smooth()`.
-cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epan", loss = "L2", K = 5, 
+cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epanechnikov", loss = "L2", K = 5, 
                                  bw_cand = NULL, parallel = FALSE, ...) {
     if (is.list(Lt) | is.list(Ly)) {
         stop("Lt and Ly can be only a list type.")
