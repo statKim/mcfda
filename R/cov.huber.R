@@ -33,7 +33,8 @@ cov.huber <- function(Lt,Ly,newt=NULL,
     
     if(is.null(sig2x))
     {
-        sig2x <- varfunc(Lt,Ly,mu=mu,sig2=sig2e)
+        # sig2x <- varfunc(Lt,Ly,mu=mu,sig2=sig2e)
+        sig2x <- varfunc(Lt, Ly, mu = mu, sig2 = sig2e, method = "HUBER")   # Huber option
     }
     
     if(is.function(sig2x))

@@ -66,11 +66,16 @@ varfunc <- function(Lt,Ly,newt=NULL,sig2=NULL,method=c('PACE','FOURIER','HUBER')
 #' @export
 predict.varfunc <- function(R,newt)
 {
-    tmp <- predict(R$obj,newt)
     
     if (R$obj$method == "HUBER") {   # Huber option
-        return(tmp)
+        if (is.list(newt)) {
+            newt <- unlist(newt)
+        }
+        res <- predict(R$obj, newt)
+        return(res)
     }
+    
+    tmp <- predict(R$obj,newt)
     
     if(is.list(tmp))
     {
