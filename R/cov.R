@@ -85,7 +85,7 @@
 #' @export covfunc
 #' @useDynLib mcfda
 covfunc <- function( t,y,newt=NULL,mu=NULL,weig=NULL,
-                      method=c('FOURIER','PACE','SP','Huber'),...)
+                      method=c('FOURIER','PACE','SP','HUBER'),...)
 {
     method <- match.arg(method)
     R <- NULL
@@ -98,7 +98,7 @@ covfunc <- function( t,y,newt=NULL,mu=NULL,weig=NULL,
             return(cov.pace(t,y,mu=mu,newt=newt,...))
         else if(method=='SP')
             return(cov.sp(t,y,mu=mu,newt=newt,...))
-        else if (method == 'Huber') {
+        else if (method == 'HUBER') {
             return(cov.huber(t,y,mu=mu,newt=newt,...))
         }
         else
@@ -170,6 +170,17 @@ predict.covfunc <- function(covobj,newt)
         {
             stopifnot(is.vector(newt))
 
+            corr.est <- covobj$rho(newt,newt)
+            var.hat <- predict(covobj$sig2x,newt)
+            sig.hat <- sqrt(var.hat)
+            cov.fitted <- corr.est * (sig.hat %*% t(sig.hat))
+            return(cov.fitted)
+        }
+    }
+    else if(covobj$method == 'HUBER') {
+        pred <- function(newt) {  # newt is a vector
+            stopifnot(is.vector(newt))
+            
             corr.est <- covobj$rho(newt,newt)
             var.hat <- predict(covobj$sig2x,newt)
             sig.hat <- sqrt(var.hat)

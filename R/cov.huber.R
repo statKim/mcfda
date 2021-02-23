@@ -23,7 +23,7 @@ cov.huber <- function(Lt,Ly,newt=NULL,
     
     if(is.null(mu))
     {
-        mu <- meanfunc(Lt, Ly, method = 'Huber')   # Huber option
+        mu <- meanfunc(Lt, Ly, method = 'HUBER')   # Huber option
     }
     
     if(is.function(mu)) mu.hat <- lapply(Lt,mu)
@@ -71,7 +71,7 @@ cov.huber <- function(Lt,Ly,newt=NULL,
                  mu=mu,
                  sig2x=sig2x,
                  rho=function(x,y) corf(x,y,th.est),
-                 method='SP')
+                 method='HUBER')
     class(rslt) <- 'covfunc'
     
     if(!is.null(newt))

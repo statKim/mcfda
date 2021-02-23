@@ -56,7 +56,7 @@
 #' # plot the object
 #' plot(mu.obj)
 #' @export meanfunc
-meanfunc <- function(t,y,newt=NULL,method=c('PACE','FOURIER','Huber'),
+meanfunc <- function(t,y,newt=NULL,method=c('PACE','FOURIER','HUBER'),
                       tuning='cv',weig=NULL,...)
 {
 
@@ -69,7 +69,7 @@ meanfunc <- function(t,y,newt=NULL,method=c('PACE','FOURIER','Huber'),
             stop('the length of y must match the length of t')
         if(method=='PACE')
             R <- mean.pace(t,y,tuning,weig,...)
-        else if (method == "Huber") {
+        else if (method == "HUBER") {
             R <- mean.huber(t,y,tuning,weig,...)   # Huber option
         }
         else
@@ -160,7 +160,7 @@ mean.huber <- function(t,y,tuning,weig,...)
         bw <- bw_obj$selected_bw
     }
     
-    R <- list(bw=bw,x=x,y=y,n=n,method='Huber',domain=domain,
+    R <- list(bw=bw,x=x,y=y,n=n,method='HUBER',domain=domain,
               weig=weig,kernel=kernel,deg=deg,yend=c(NULL,NULL))
     class(R) <- 'meanfunc'
     
