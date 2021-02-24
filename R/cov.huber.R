@@ -210,7 +210,7 @@ cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epanechnikov", l
                                     y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
                                                                bw = bw_cand[i], kernel = kernel, loss = loss, ...)
                                     y <- unlist(Ly_test)
-                                    err <- err + (y %*% y_hat)   # squared errors 
+                                    err <- err + sum((y - y_hat)^2)   # squared errors 
                                 }
                                 
                                 return(err)
@@ -229,7 +229,7 @@ cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epanechnikov", l
                 y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
                                            bw = bw_cand[i], kernel = kernel, loss = loss, ...)
                 y <- unlist(Ly_test)
-                cv_error[i] <- cv_error[i] + (y %*% y_hat)   # squared errors
+                cv_error[i] <- cv_error[i] + sum((y - y_hat)^2)   # squared errors
             }
         }
     }
