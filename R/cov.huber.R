@@ -95,67 +95,67 @@ cov.huber <- function(Lt,Ly,newt=NULL,
 #   For loss = "Huber", it uses `rlm()` in `MASS` and fits the robust regression with Huber loss. 
 #   So additional parameters of `rlm()` can be applied. (k2, maxit, ...)
 local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epanechnikov", loss = "L2", ...) {
-    if (is.list(Lt) | is.list(Ly)) {
-        Lt <- unlist(Lt)
-        Ly <- unlist(Ly)
+  if (is.list(Lt) | is.list(Ly)) {
+    Lt <- unlist(Lt)
+    Ly <- unlist(Ly)
+  }
+  
+  if (is.null(newt)) {
+    newt <- Lt
+  }
+  if (is.list(newt)) {
+    newt <- unlist(newt)
+  }
+  
+  # # If `bw` is not defined, 5-fold CV is performed.
+  # if (is.null(bw)) {
+  #   bw <- cv.local_kern_smooth(Lt = Lt, Ly = Ly, newt = NULL, 
+  #                              kernel = kernel, loss = loss, K = 5, parallel = TRUE)
+  # }
+  
+  w <- 1/length(Lt)
+  mu_hat <- sapply(newt, function(t) {
+    tmp <- (Lt - t) / bw
+    
+    if (kernel == "epanechnikov") {
+      kern <- (3/4 * w) * (1 - tmp^2)   # Epanechnikov kernel
+    } else if (kernel == "gauss") {
+      kern <- w * 1/sqrt(2*pi) * exp(-1/2 * tmp^2)   # gaussian kernel
     }
     
-    if (is.null(newt)) {
-        newt <- Lt
+    idx <- which(kern > 0)   # non-negative values
+    W <- diag(kern[idx]) / bw
+    X <- matrix(1, length(idx), 2)
+    X[, 2] <- Lt[idx] - t
+    Y <- Ly[idx]
+    
+    if (loss == "L2") {   # squared loss
+      # Weighted least squares
+      beta <- solve(t(X) %*% W %*% X) %*% t(X) %*% W %*% Y
+      
+      return(beta[1, ])
+    } else if (loss == "Huber") {   # huber loss
+      fit <- rlm(x = sqrt(W) %*% X,
+                 y = sqrt(W) %*% Y,
+                 maxit = 100,
+                 scale.est = "Huber",
+                 ...)
+      # df <- data.frame(y = sqrt(W) %*% Ly[idx],
+      #                  x = sqrt(W) %*% X)
+      # fit <- rlm(y ~ .-1,
+      #            data = df,
+      #            method = "M",
+      #            maxit = 100,
+      #            scale.est = "Huber",
+      #            k2 = 2)
+      beta <- fit$coefficients
+      
+      return(beta[1])
+      # return(fit$s)
     }
-    if (is.list(newt)) {
-        newt <- unlist(newt)
-    }
-    
-    # # If `bw` is not defined, 5-fold CV is performed.
-    # if (is.null(bw)) {
-    #   bw <- cv.local_kern_smooth(Lt = Lt, Ly = Ly, newt = NULL, 
-    #                              kernel = kernel, loss = loss, K = 5, parallel = TRUE)
-    # }
-    
-    w <- 1/length(Lt)
-    mu_hat <- sapply(newt, function(t) {
-        tmp <- (Lt - t) / bw
-        
-        if (kernel == "epanechnikov") {
-            kern <- (3/4 * w) * (1 - tmp^2)   # Epanechnikov kernel
-        } else if (kernel == "gauss") {
-            kern <- w * 1/sqrt(2*pi) * exp(-1/2 * tmp^2)   # gaussian kernel
-        }
-        
-        idx <- which(kern > 0)   # non-negative values
-        W <- diag(kern[idx]) / bw
-        X <- matrix(1, length(idx), 2)
-        X[, 2] <- Lt[idx] - t
-        Y <- Ly[idx]
-        
-        if (loss == "L2") {   # squared loss
-            # Weighted least squares
-            beta <- solve(t(X) %*% W %*% X) %*% t(X) %*% W %*% Y
-            
-            return(beta[1, ])
-        } else if (loss == "Huber") {   # huber loss
-            fit <- rlm(x = sqrt(W) %*% X,
-                       y = sqrt(W) %*% Y,
-                       maxit = 100,
-                       scale.est = "Huber",
-                       ...)
-            # df <- data.frame(y = sqrt(W) %*% Ly[idx],
-            #                  x = sqrt(W) %*% X)
-            # fit <- rlm(y ~ .-1,
-            #            data = df,
-            #            method = "M",
-            #            maxit = 100,
-            #            scale.est = "Huber",
-            #            k2 = 2)
-            beta <- fit$coefficients
-            
-            return(beta[1])
-            # return(fit$s)
-        }
-    })
-    
-    return( as.numeric(mu_hat) )
+  })
+  
+  return( as.numeric(mu_hat) )
 }
 
 ### K-fold cross validation to find optimal bandwidth for local polynomial kernel smoother
@@ -166,83 +166,92 @@ local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epanechn
 # parallel : If parallel is TRUE, it implements `foreach()` in `doParallel` for CV.
 # Other parameters are same with `local_kern_smooth()`.
 cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epanechnikov", loss = "L2", K = 5, 
-                                 bw_cand = NULL, parallel = FALSE, ...) {
-    if (is.list(Lt) | is.list(Ly)) {
-        stop("Lt and Ly can be only a list type.")
+                                 bw_cand = NULL, parallel = FALSE, k2 = 1.345, ...) {
+  if (!(is.list(Lt) & is.list(Ly))) {
+    stop("Lt and Ly should be only a list type.")
+  }
+  
+  if (is.null(bw_cand)) {
+    a <- min(unlist(Lt))
+    b <- max(unlist(Lt))
+    bw_cand <- 10^seq(-2, 0, length.out = 20) * (b - a)/3
+  }
+  
+  # get index for each folds
+  folds <- list()
+  n <- length(Lt)   # the number of curves
+  fold_num <- n %/% K   # the number of curves for each folds
+  fold_sort <- sample(1:n, n)
+  for (k in 1:K) {
+    ind <- (fold_num*(k-1)+1):(fold_num*k)
+    if (k == K) {
+      ind <- (fold_num*(k-1)+1):n
     }
+    folds[[k]] <- fold_sort[ind]
+  }
+  
+  # K-fold cross validation
+  if (parallel == TRUE) {
+    require(doParallel)
+    # Parallel computing setting
+    ncores <- detectCores() - 3
+    cl <- makeCluster(ncores)
+    registerDoParallel(cl)
     
-    if (is.null(bw_cand)) {
-        a <- min(unlist(Lt))
-        b <- max(unlist(Lt))
-        bw_cand <- 10^seq(-2, 0, length.out = 20) * (b - a)/3
+    cv_error <- foreach(i = 1:length(bw_cand), .combine = "c", 
+                        .export = c("local_kern_smooth"), .packages = c("MASS")) %dopar% {
+      err <- 0
+      for (k in 1:K) {
+        Lt_train <- Lt[ -folds[[k]] ]
+        Ly_train <- Ly[ -folds[[k]] ]
+        Lt_test <- Lt[ folds[[k]] ]
+        Ly_test <- Ly[ folds[[k]] ]
+        
+        y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
+                                   bw = bw_cand[i], kernel = kernel, loss = loss, ...)
+        y <- unlist(Ly_test)
+        if (loss == "L2") {
+          err <- err + sum((y - y_hat)^2)   # squared errors
+        } else if (loss == "Huber") {
+          a <- abs(y - y_hat)
+          err_huber <- ifelse(a > k2, k2*(a - k2/2), a^2/2)
+          err <- err + sum(err_huber)
+        }
+      }
+      
+      return(err)
     }
-    
-    # get index for each folds
-    folds <- list()
-    n <- length(Lt)   # the number of curves
-    fold_num <- n %/% K   # the number of curves for each folds
-    fold_sort <- sample(1:n, n)
+    stopCluster(cl)
+  } else {
+    cv_error <- rep(0, length(bw_cand))
     for (k in 1:K) {
-        ind <- (fold_num*(k-1)+1):(fold_num*k)
-        if (k == K) {
-            ind <- (fold_num*(k-1)+1):n
+      Lt_train <- Lt[ -folds[[k]] ]
+      Ly_train <- Ly[ -folds[[k]] ]
+      Lt_test <- Lt[ folds[[k]] ]
+      Ly_test <- Ly[ folds[[k]] ]
+      
+      for (i in 1:length(bw_cand)) {
+        y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
+                                   bw = bw_cand[i], kernel = kernel, loss = loss, ...)
+        y <- unlist(Ly_test)
+        # cv_error[i] <- cv_error[i] + sum((y - y_hat)^2)   # squared errors
+        if (loss == "L2") {
+          cv_error[i] <- cv_error[i] + sum((y - y_hat)^2)   # squared errors
+        } else if (loss == "Huber") {
+          a <- abs(y - y_hat)
+          err_huber <- ifelse(a > k2, k2*(a - k2/2), a^2/2)
+          cv_error[i] <- cv_error[i] + sum(err_huber)
         }
-        folds[[k]] <- fold_sort[ind]
+      }
     }
-    
-    # K-fold cross validation
-    if (parallel == TRUE) {
-        require(doParallel)
-        # Parallel computing setting
-        ncores <- detectCores() - 3
-        cl <- makeCluster(ncores)
-        registerDoParallel(cl)
-        
-        cv_error <- foreach(i = 1:length(bw_cand), .combine = "c", 
-                            .export = c("local_kern_smooth"), .packages = c("MASS")) %dopar% {
-                                err <- 0
-                                for (k in 1:K) {
-                                    Lt_train <- Lt[ -folds[[k]] ]
-                                    Ly_train <- Ly[ -folds[[k]] ]
-                                    Lt_test <- Lt[ folds[[k]] ]
-                                    Ly_test <- Ly[ folds[[k]] ]
-                                    
-                                    y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
-                                                               bw = bw_cand[i], kernel = kernel, loss = loss, ...)
-                                    y <- unlist(Ly_test)
-                                    err <- err + sum((y - y_hat)^2)   # squared errors 
-                                }
-                                
-                                return(err)
-                            }
-        
-        stopCluster(cl)
-    } else {
-        cv_error <- rep(0, length(bw_cand))
-        for (k in 1:K) {
-            Lt_train <- Lt[ -folds[[k]] ]
-            Ly_train <- Ly[ -folds[[k]] ]
-            Lt_test <- Lt[ folds[[k]] ]
-            Ly_test <- Ly[ folds[[k]] ]
-            
-            for (i in 1:length(bw_cand)) {
-                y_hat <- local_kern_smooth(Lt = Lt_train, Ly = Ly_train, newt = Lt_test, 
-                                           bw = bw_cand[i], kernel = kernel, loss = loss, ...)
-                y <- unlist(Ly_test)
-                cv_error[i] <- cv_error[i] + sum((y - y_hat)^2)   # squared errors
-            }
-        }
-    }
-    
-    bw <- bw_cand[ which.min(cv_error) ]
-    
-    return(
-        list(selected_bw = bw,
+  }
+  
+  bw <- list(selected_bw = bw_cand[ which.min(cv_error) ],
              cv.error = data.frame(bw = bw_cand,
                                    error = cv_error))
-    )
+  
+  return(bw)
 }
-
 
 
 
