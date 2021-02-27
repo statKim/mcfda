@@ -122,7 +122,7 @@ mean.huber <- function(t,y,tuning,weig,...)
         kernel <- tolower(get.optional.param('kernel',others,'epanechnikov'))
         bw <- get.optional.param('bw',others,NULL)
         if (is.null(bw)) {
-            bw_obj <- cv.local_kern_smooth(Lt = x, Ly = y, newt = x, 
+            bw_obj <- cv.local_kern_smooth(Lt = t, Ly = y, newt = x, 
                                            kernel = kernel, loss = "Huber", K = 5, parallel = TRUE)
             bw <- bw_obj$selected_bw
         }
