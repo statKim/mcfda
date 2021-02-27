@@ -95,6 +95,15 @@ cov.huber <- function(Lt,Ly,newt=NULL,
 #   For loss = "Huber", it uses `rlm()` in `MASS` and fits the robust regression with Huber loss. 
 #   So additional parameters of `rlm()` can be applied. (k2, maxit, ...)
 local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epanechnikov", loss = "L2", ...) {
+  # If `bw` is not defined, 5-fold CV is performed.
+  if (is.null(bw)) {
+    if (!(is.list(Lt) & is.list(Ly))) {
+      stop("Lt or Ly are not list type. If bw is NULL, 5-fold CV are performed but it is needed list type.")
+    }
+    bw <- cv.local_kern_smooth(Lt = Lt, Ly = Ly, newt = NULL,
+                               kernel = kernel, loss = loss, K = 5, parallel = TRUE)
+  }
+  
   if (is.list(Lt) | is.list(Ly)) {
     Lt <- unlist(Lt)
     Ly <- unlist(Ly)
@@ -106,12 +115,6 @@ local_kern_smooth <- function(Lt, Ly, newt = NULL, bw = NULL, kernel = "epanechn
   if (is.list(newt)) {
     newt <- unlist(newt)
   }
-  
-  # # If `bw` is not defined, 5-fold CV is performed.
-  # if (is.null(bw)) {
-  #   bw <- cv.local_kern_smooth(Lt = Lt, Ly = Ly, newt = NULL, 
-  #                              kernel = kernel, loss = loss, K = 5, parallel = TRUE)
-  # }
   
   w <- 1/length(Lt)
   mu_hat <- sapply(newt, function(t) {
@@ -252,6 +255,11 @@ cv.local_kern_smooth <- function(Lt, Ly, newt = NULL, kernel = "epanechnikov", l
   
   return(bw)
 }
+
+
+
+
+
 
 
 
