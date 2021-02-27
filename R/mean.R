@@ -114,8 +114,19 @@ mean.huber <- function(t,y,tuning,weig,...)
                     domain[2]+0.01*(domain[2]-domain[1]))
     }
     
-    if(is.list(t))
+    if (!is.list(t)) {
+        stop("t and y should be list type.")
+    }
+    if (is.list(t))
     {
+        kernel <- tolower(get.optional.param('kernel',others,'epanechnikov'))
+        bw <- get.optional.param('bw',others,NULL)
+        if (is.null(bw)) {
+            bw_obj <- cv.local_kern_smooth(Lt = x, Ly = y, newt = x, 
+                                           kernel = kernel, loss = "Huber", K = 5, parallel = TRUE)
+            bw <- bw_obj$selected_bw
+        }
+        
         n <- length(t)
         x <- unlist(t)
         y <- unlist(y)
@@ -128,24 +139,15 @@ mean.huber <- function(t,y,tuning,weig,...)
         
         datatype <- 'irregular'
     }
-    else
-    {
-        n <- length(t)
-        weig <- rep(1/n,n)
-        datatype <- 'regular'
-        
-        x <- t
-        y <- apply(y,2,mean)
-    }
     
     
-    kernel <- tolower(get.optional.param('kernel',others,'epanechnikov'))
+    
     #kernel <- match.arg(kernel,c('GAUSSIAN','EPANECHNIKOV'))
     #if(kernel == 'GAUSSIAN') kernel <- locpol::gaussK
     #else kernel <- locpol::EpaK
     
     deg <- get.optional.param('deg',others,1)
-    bw <- get.optional.param('bw',others,NULL)
+    
     
     ord <- sort(x,index.return=T)$ix
     x <- x[ord]
@@ -154,11 +156,7 @@ mean.huber <- function(t,y,tuning,weig,...)
     
     # if(is.null(bw)) bw <- bw.lp1D(x,y,weight=weig,kernel=kernel,degree=deg,method='cv',K=5,H=NULL)
     # #bw <- compute.bw.1D(x,y,tuning,weig,kernel,deg)
-    if (is.null(bw)) {
-        bw_obj <- cv.local_kern_smooth(Lt = x, Ly = y, newt = x, 
-                                       kernel = kernel, loss = "Huber", K = 5, parallel = TRUE)
-        bw <- bw_obj$selected_bw
-    }
+    
     
     R <- list(bw=bw,x=x,y=y,n=n,method='HUBER',domain=domain,
               weig=weig,kernel=kernel,deg=deg,yend=c(NULL,NULL))
